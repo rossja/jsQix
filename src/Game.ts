@@ -218,7 +218,7 @@ export class Game {
     this.drawActiveRuns(this.activeLineGfx, cellWidth, cellHeight);
 
     this.markerGfx.clear();
-    const markerSize = Math.max(cellWidth, cellHeight) * 4;
+    const markerSize = Math.max(cellWidth, cellHeight) * 8;
     const markerCenterX = this.world.player.gridX * cellWidth + cellWidth / 2;
     const markerCenterY = this.world.player.gridY * cellHeight + cellHeight / 2;
     this.markerGfx.moveTo(markerCenterX, markerCenterY - markerSize / 2);
@@ -232,7 +232,10 @@ export class Game {
     const qixX = this.world.qix.x * cellWidth;
     const qixY = this.world.qix.y * cellHeight;
     const palette = [0x7affff, 0x4da6ff, 0x66ffcc, 0xa64dff, 0xff4dff];
-    const baseSpan = Math.max(cellWidth, cellHeight) * 3;
+    const spacingMin = Math.max(cellWidth, cellHeight) * 2.5;
+    const spacingMax = Math.max(cellWidth, cellHeight) * 6;
+    const spacingT = (Math.sin(this.world.qix.spacingPhase) + 1) / 2;
+    const baseSpan = spacingMin + (spacingMax - spacingMin) * spacingT;
     const lines = this.world.qix.lines;
     const centerIndex = (lines.length - 1) / 2;
     for (let i = 0; i < lines.length; i += 1) {
@@ -242,7 +245,7 @@ export class Game {
       const perpY = Math.sin(line.angle + Math.PI / 2);
       const ox = perpX * offset;
       const oy = perpY * offset;
-      const length = line.length * Math.max(cellWidth, cellHeight) * 10;
+      const length = line.length * Math.max(cellWidth, cellHeight) * 12;
       const dx = Math.cos(line.angle) * length;
       const dy = Math.sin(line.angle) * length;
       this.qixGfx.moveTo(qixX + ox - dx, qixY + oy - dy);
@@ -257,7 +260,7 @@ export class Game {
     this.sparxGfx.circle(
       sparx.x * cellWidth,
       sparx.y * cellHeight,
-      Math.max(cellWidth, cellHeight) * 1.2
+      Math.max(cellWidth, cellHeight) * 2.4
     );
     this.sparxGfx.fill(config.colors.sparx);
   };
