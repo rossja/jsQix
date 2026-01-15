@@ -1,0 +1,380 @@
+PRODUCT REQUIREMENTS DOCUMENT (PRD) — QIX REPLICA
+
+1) EXECUTIVE SUMMARY
+
+Objective
+- Build a faithful, playable replica of the classic 1981 arcade game Qix.
+- Reproduce core mechanics: territory capture by drawing lines, enemy avoidance, scoring, and progressive difficulty.
+- Structure the project for an agentic code IDE: modular subsystems, deterministic logic, automated tests, and clear interfaces.
+
+Primary Goal
+- Capture territory by drawing lines into unclaimed space and closing regions while avoiding enemies, until a target percentage of the playfield is claimed.
+
+Non-Goals (for v1)
+- Perfect arcade-accurate timing/physics at the CPU-cycle level
+- Emulating original hardware
+- Online multiplayer
+
+Success Criteria
+- Game is playable end-to-end across multiple levels
+- Territory capture behaves correctly (captures the region that does NOT contain a Qix)
+- Enemies behave plausibly according to original rules (Qix in unclaimed area; Sparx on claimed boundary; Super Sparx can traverse active lines)
+- Scoring and level completion rules match documented behavior closely
+- Stable frame rate, no input lag, no geometry bugs causing crashes
+
+2) TARGET PLATFORMS
+
+Primary
+- Web: HTML5 Canvas / WebGL (recommended for fast iteration)
+Secondary
+- Desktop (packaged via Electron or native build, optional)
+
+Display
+- Use a 4:3 logical playfield; scale to fit window.
+- Recommended logical resolution: 640x480 (or 800x600).
+
+Input
+- Keyboard: arrows/WASD + two draw buttons (z for fast/x for slow) + pause (spacebar)
+- Optional: gamepad mapping
+
+3) GAME OVERVIEW (PLAYER EXPERIENCE)
+
+Core Loop
+- Navigate along safe boundaries.
+- Start a draw into the dangerous unclaimed area to carve out a region.
+- Complete the line by reconnecting to a boundary.
+- The game claims the enclosed region not containing the Qix.
+- Avoid collisions with Qix, Sparx, Super Sparx, and fuse while drawing.
+- Reach the capture threshold to complete the level.
+
+4) GAME RULES AND SYSTEMS
+
+4.1 PLAYFIELD
+
+- The playfield is a rectangle bounded by an outer border.
+- Initially, only the outer border is safe/claimed boundary; interior is unclaimed.
+- Claimed territory is filled/colored and becomes safe ground (part of the boundary network).
+- Unclaimed territory remains dangerous and is where Qix moves.
+
+Config Variables
+- captureThreshold (default 0.75)
+- initialLives (default 3)
+- levelIndex starting at 1
+
+4.2 PLAYER / MARKER
+
+State Machine
+- OnBoundary: marker is on a claimed boundary segment (including outer border)
+- Drawing: marker is creating an active line through unclaimed territory
+- Dead: life lost animation/state
+- Respawn: reset marker to a safe starting position on boundary
+
+Movement
+- 4-directional grid-like or pixel-continuous movement (choose one implementation; must feel like classic Qix).
+- Marker can move only along boundary segments in OnBoundary state.
+- In Drawing state, marker moves through unclaimed space, extending the active line.
+
+Drawing Modes
+- Fast Draw: faster movement; lower scoring rate
+- Slow Draw: slower movement; higher scoring rate (2x)
+
+Constraints
+- Active line cannot intersect itself.
+- Active line cannot be crossed by the marker.
+- Active line ends only when marker reconnects to an existing boundary.
+
+Fuse
+- If the player pauses/stops while drawing, a fuse starts at the draw origin and travels along the active line toward the marker.
+- Fuse contact with marker causes life loss.
+- Fuse does not exist when not drawing.
+
+4.3 TERRITORY CAPTURE
+
+When capture happens
+- Player completes an active line by touching/reconnecting to any existing boundary (outer border or claimed boundary).
+
+What gets captured
+- The completed line partitions the unclaimed region into two (or more) regions.
+- The game must identify which resulting region(s) contain the Qix (or multiple Qixes) and claim only the region(s) that contain no Qix.
+- In the common case of a single Qix, exactly one side is captured: the side that does NOT contain the Qix.
+
+Area / Percentage
+- The capture percentage is: claimedArea / totalPlayfieldArea.
+- claimedArea includes all claimed regions (outer boundary has zero area; only filled regions count).
+- Level completes when claimedPercentage >= captureThreshold OR other documented completion condition (see Level Completion).
+
+Implementation Requirement (v1)
+- Use a robust discrete representation for the playfield (recommended): a cell grid occupancy map at a chosen resolution (e.g., 320x240 or 400x300) to simplify flood fill and area calculation.
+- Alternative (harder): polygon clipping / computational geometry; acceptable only if tests confirm correctness.
+
+Recommended Capture Algorithm (grid-based)
+- Maintain a boolean grid: claimed (true/false).
+- Maintain an activeLine grid marking the currently drawn path.
+- Upon closure:
+  1) Temporarily treat activeLine as boundary (blocked cells).
+  2) Flood fill from each Qix position on the grid to mark reachable unclaimed cells (qixReachable).
+  3) Any unclaimed cell not reachable by any Qix becomes claimed (set claimed=true).
+  4) Convert activeLine cells into claimed boundary (claimed=true).
+  5) Clear activeLine state.
+
+Notes
+- If multiple Qixes exist, do flood fill from each and union their reachable sets.
+
+4.4 ENEMIES
+
+4.4.1 Qix
+- Moves within unclaimed territory only.
+- Visually represented as moving line segments (polyline). Core collision can be based on:
+  - Qix “body” approximated by one or more segments
+  - Collision with marker (when drawing) and with active line
+
+Behavior Requirements
+- Movement should be semi-random (random walk / jittery vector changes).
+- Speed and aggressiveness increase with level.
+- Should not enter claimed territory.
+
+Collision Rules
+- If Qix intersects the active line: player loses a life.
+- If Qix contacts the marker while in Drawing state: player loses a life.
+- Contact with marker while OnBoundary is typically not possible if Qix is confined to unclaimed space (ensure confinement holds).
+
+4.4.2 Sparx
+- Travels along claimed boundaries (outer border and edges of claimed regions).
+- Does not travel on active line (regular Sparx).
+- Touching the marker while marker is OnBoundary: life lost.
+- If marker is Drawing and Sparx reaches the draw origin or encounters the active line endpoint behavior, handle per classic behavior; v1 may simplify to: Sparx cannot traverse activeLine, but collision with marker on boundary is lethal.
+
+Behavior
+- Patrol movement direction changes at corners.
+- Speed increases with level.
+- Count may increase with level.
+
+4.4.3 Super Sparx
+- More dangerous variant; can traverse the active line and chase the marker during drawing.
+- Typically introduced after time pressure / later levels.
+- Collision with marker: life lost.
+
+4.5 LIFE, DEATH, RESPAWN
+
+Lives
+- Start with initialLives (default 3).
+- On death, decrement lives and reset marker to a safe boundary position.
+- Reset active line and fuse on death.
+- Keep claimed regions as-is (no rollback) unless implementing exact arcade behavior (optional).
+
+Game Over
+- Occurs when lives reach 0.
+- Show game over screen and allow restart.
+
+4.6 LEVEL COMPLETION AND PROGRESSION
+
+Completion
+- Default: claimedPercentage >= captureThreshold (75%).
+- Optional additional completion rule (documented in some references): if the playfield is split into multiple regions such that each remaining unclaimed region contains at least one Qix, treat as complete. For v1, implement the threshold rule; add the split-rule as an optional enhancement.
+
+Progression
+- Increase difficulty by:
+  - Qix speed and number of Qixes (e.g., multiple Qixes after early levels)
+  - Sparx speed and/or count
+  - Introduce Super Sparx
+  - Shorter fuse delay and faster fuse
+
+Level Parameters (example table; tune later)
+- Level 1: 1 Qix, 2 Sparx, no Super Sparx, slow speeds
+- Level 2: 1 Qix, 2 Sparx, slightly faster
+- Level 3+: 2 Qix (or faster 1 Qix), 2-3 Sparx
+- Later: Super Sparx enabled, higher speeds
+
+5) SCORING
+
+Scoring Requirements (configurable, but default to classic-style)
+- Points awarded based on area captured and drawing mode.
+
+Suggested Scoring Model (matches common documentation patterns)
+- Fast capture: 100 points per 1% captured (or equivalent normalized unit)
+- Slow capture: 200 points per 1% captured
+- Completion bonus: based on amount beyond threshold (optional)
+- Special bonus: for extremely high capture (optional)
+
+Exact numeric constants should be stored in a single config file and covered by tests.
+
+Score Events
+- On region capture: award points proportional to area captured and draw mode.
+- On level complete: award completion bonus.
+- Optional: bonus for reaching 99% or similar milestones.
+
+6) USER INTERFACE (UI) / HUD
+
+HUD Elements
+- Score
+- Lives remaining
+- Level number
+- Claimed percentage (progress gauge)
+- Optional: time pressure indicator (if implementing a timer leading to Super Sparx)
+
+Screens
+- Title screen: Start / Controls
+- In-game HUD overlay
+- Pause screen
+- Game over screen
+- Level complete transition screen (brief)
+
+Visual Requirements
+- Claimed territory: solid fill
+- Unclaimed territory: dark/empty
+- Active line: high-contrast line
+- Marker: distinct sprite/shape
+- Qix: animated line segments
+- Sparx/Super Sparx: small moving sparks along boundary
+
+7) AUDIO
+
+Minimum
+- Draw start / draw loop / draw end
+- Capture sound
+- Death sound
+- Level complete sound
+
+Optional
+- Background ambience/music (looping)
+
+8) TECHNICAL REQUIREMENTS
+
+8.1 ARCHITECTURE
+
+Modules (must be separate files/modules)
+- GameLoop / TimeStep
+- InputManager
+- WorldModel (playfield grid, claimed map, active line)
+- TerritoryCaptureSystem (closure detection, flood fill, claiming)
+- CollisionSystem (marker vs enemies vs line/fuse)
+- EnemySystem:
+  - QixController
+  - SparxController
+  - SuperSparxController
+- ScoringSystem
+- UI/HUD
+- AudioManager
+- Persistence (optional: high scores)
+
+8.2 TIMESTEP AND DETERMINISM
+
+- Fixed timestep simulation recommended (e.g., 60 Hz) with render interpolation if needed.
+- Seedable RNG for enemy behavior (for reproducible tests).
+- Separation between simulation state and rendering state.
+
+8.3 DATA STRUCTURES (RECOMMENDED)
+
+Playfield Grid
+- A 2D grid (boolean claimed) at reduced resolution relative to screen.
+- Mapping between world coordinates (pixels) and grid coordinates.
+
+Active Line
+- List of points in world coordinates for rendering.
+- Corresponding rasterized grid cells for capture and collision.
+
+Boundaries
+- Derived from claimed grid or tracked as edge graph.
+- For Sparx movement: represent boundary as a graph of traversable edge segments or as a boundary-following algorithm on the claimed grid.
+
+8.4 COLLISION
+
+- Marker vs Sparx: collision on boundary (distance threshold).
+- Marker vs Qix:
+  - While Drawing: marker collision with Qix segments.
+- Active line vs Qix:
+  - If Qix intersects any segment of active line: death.
+- Fuse vs marker:
+  - Fuse position moves along active line segments toward marker.
+
+9) TESTING REQUIREMENTS
+
+Automated Tests (must exist for v1)
+- Territory capture correctness:
+  - Simple rectangle cut where Qix is clearly on one side
+  - Multiple Qix scenario: only regions containing no Qix are claimed
+  - No-closure: no claim occurs
+- Area percentage calculation:
+  - Known grid patterns produce expected percentages
+- Collision tests:
+  - Qix intersects active line triggers death
+  - Sparx contacts marker triggers death
+  - Fuse reaches marker triggers death
+- State machine tests:
+  - OnBoundary -> Drawing -> OnBoundary (successful closure)
+  - Drawing interrupted by death resets active line
+
+Property/Invariant Tests (nice-to-have)
+- Claimed area never decreases (unless explicitly designed to)
+- Active line never self-intersects (enforced or detected)
+
+10) CONFIGURATION / TUNING
+
+All tunables must be centralized in a config object/file:
+- speeds (marker, fast/slow draw, fuse speed, Qix speed, Sparx speed)
+- captureThreshold
+- scoring constants
+- grid resolution
+- level progression parameters
+- RNG seed for deterministic runs (test mode)
+
+11) MILESTONES (IMPLEMENTATION PLAN)
+
+Milestone 1: Core movement & rendering
+- Render playfield, marker, claimed boundary (outer border)
+- Marker moves along boundary
+- Basic HUD skeleton
+
+Milestone 2: Drawing & active line
+- Drawing state with fast/slow modes
+- Render active line
+- Prevent self-crossing and invalid moves
+
+Milestone 3: Territory capture (grid-based)
+- Implement closure detection
+- Flood fill to decide captured region
+- Claim region, compute percentage, display progress
+
+Milestone 4: Enemies & collisions
+- Implement Qix movement within unclaimed
+- Implement Sparx boundary patrol
+- Add collisions with marker and active line
+- Add fuse behavior
+
+Milestone 5: Scoring, level progression, polish
+- Implement scoring events
+- Level complete logic and transitions
+- Add Super Sparx and difficulty tuning
+- Add audio and visual polish
+- Add restart/game over flow
+
+12) ACCEPTANCE CRITERIA (V1)
+
+- Player can:
+  - Move along boundaries
+  - Draw lines (fast/slow)
+  - Close regions and capture territory
+- Game can:
+  - Correctly capture the region not containing the Qix
+  - Update claimed percentage accurately
+  - End level when threshold met
+- Enemies can:
+  - Qix moves in unclaimed space and kills on active line intersection
+  - Sparx patrols boundaries and kills on contact
+  - Fuse triggers when pausing during draw and kills on contact
+- Score updates on captures and persists through level completion
+- Game over occurs when lives reach 0 and restart works
+
+13) OPEN QUESTIONS / OPTIONAL ENHANCEMENTS
+
+Optional Enhancements (post-v1)
+- Exact arcade scoring constants and multiplier mechanics
+- Multiple Qix behaviors and multi-region completion rule
+- High score table persistence
+- CRT/post-processing shader visuals
+- Input rebinding UI
+- Replay/recording system for deterministic playback
+
+Implementation Choice Notes
+- Grid-based territory capture is strongly recommended for correctness and speed of agentic iteration.
+- Boundary graph generation for Sparx can be simplified initially by “wall-following” on the claimed grid, then optimized.
