@@ -3,6 +3,11 @@ export const config = {
   gridHeight: 240,
   captureThreshold: 0.75,
   initialLives: 3,
+  scoring: {
+    fastPerPercent: 100,
+    slowPerPercent: 200,
+    completionBonusPerPercent: 100
+  },
   speeds: {
     boundaryCellsPerSec: 20,
     drawFastCellsPerSec: 48,

@@ -3,6 +3,7 @@ import { WorldModel, GridPoint, DrawMode } from "../world/WorldModel";
 
 export type CaptureResult = {
   capturedCells: number;
+  capturedPercent: number;
 };
 
 function buildBlockedGrid(claimed: BoolGrid, activeLine: BoolGrid): BoolGrid {
@@ -48,5 +49,7 @@ export function captureTerritory(
     }
   }
 
-  return { capturedCells };
+  const total = world.gridWidth * world.gridHeight;
+  const capturedPercent = total > 0 ? (capturedCells / total) * 100 : 0;
+  return { capturedCells, capturedPercent };
 }

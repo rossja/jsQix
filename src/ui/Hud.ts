@@ -7,6 +7,7 @@ type HudState = {
   percent: number;
   playerX: number;
   playerY: number;
+  levelComplete: boolean;
 };
 
 export class Hud {
@@ -31,6 +32,7 @@ export class Hud {
 
   update(state: HudState): void {
     const pct = Math.floor(state.percent * 100);
-    this.text.text = `Score ${state.score}  Lives ${state.lives}  Level ${state.level}  ${pct}%\nArrows/WASD move, hold Z fast draw or X slow draw`;
+    const status = state.levelComplete ? "LEVEL COMPLETE!" : "";
+    this.text.text = `Score ${state.score}  Lives ${state.lives}  Level ${state.level}  ${pct}%  ${status}\nArrows/WASD move, hold Z fast draw or X slow draw`;
   }
 }

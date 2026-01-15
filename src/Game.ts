@@ -27,6 +27,7 @@ export class Game {
   private playfieldX = 0;
   private playfieldY = 0;
   private elapsed = 0;
+  private levelCompleteTimer = 0;
 
   constructor(app: PIXI.Application) {
     this.app = app;
@@ -81,10 +82,18 @@ export class Game {
     const move = this.input.getMoveVector();
     const drawMode = this.input.getDrawMode();
 
-    this.updatePlayer(dt, move.x, move.y, drawMode);
-    updateQix(this.world, dt);
-    updateSparx(this.world, dt);
-    this.handleCollisions();
+    if (!this.world.levelComplete) {
+      this.updatePlayer(dt, move.x, move.y, drawMode);
+      updateQix(this.world, dt);
+      updateSparx(this.world, dt);
+      this.handleCollisions();
+      this.checkLevelComplete();
+    } else {
+      this.levelCompleteTimer += dt;
+      if (this.levelCompleteTimer >= 2) {
+        this.advanceLevel();
+      }
+    }
     this.input.endFrame();
 
     this.hud.update({
@@ -93,7 +102,8 @@ export class Game {
       level: this.world.level,
       percent: this.world.claimedPercentage(),
       playerX: this.world.player.gridX,
-      playerY: this.world.player.gridY
+      playerY: this.world.player.gridY,
+      levelComplete: this.world.levelComplete
     });
   };
 
@@ -134,17 +144,24 @@ export class Game {
       }
 
       const nextIsClaimed = getCell(this.world.claimed, nextX, nextY);
+      const nextIsBoundary = this.isBoundaryCell(nextX, nextY);
       const nextIsActive = getCell(this.world.activeLine, nextX, nextY);
 
       if (!isDrawing) {
-        if (!nextIsClaimed && drawMode !== "none") {
+        if (nextIsClaimed) {
+          if (!nextIsBoundary) {
+            player.moveAccumulator = 0;
+            break;
+          }
+        } else {
+          if (drawMode === "none") {
+            player.moveAccumulator = 0;
+            break;
+          }
           player.state = "Drawing";
           player.mode = drawMode;
           player.drawOrigin = { x: player.gridX, y: player.gridY };
           setCell(this.world.activeLine, player.gridX, player.gridY, true);
-        } else if (!nextIsClaimed) {
-          player.moveAccumulator = 0;
-          break;
         }
       }
 
@@ -160,7 +177,14 @@ export class Game {
 
       if (player.state === "Drawing") {
         if (nextIsClaimed) {
-          captureTerritory(this.world, this.world.qixPositions, player.mode);
+          if (!nextIsBoundary) {
+            player.moveAccumulator = 0;
+            break;
+          }
+          const result = captureTerritory(this.world, this.world.qixPositions, player.mode);
+          const pointsPerPercent =
+            player.mode === "slow" ? config.scoring.slowPerPercent : config.scoring.fastPerPercent;
+          this.world.score += Math.floor(result.capturedPercent * pointsPerPercent);
           player.state = "OnBoundary";
           player.mode = "none";
           break;
@@ -286,6 +310,49 @@ export class Game {
     if (hasRect) {
       target.fill(config.colors.activeLine);
     }
+  }
+
+  private isBoundaryCell(x: number, y: number): boolean {
+    if (!inBounds(this.world.claimed, x, y)) {
+      return false;
+    }
+    if (!getCell(this.world.claimed, x, y)) {
+      return false;
+    }
+    const neighbors = [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1]
+    ];
+    for (const [nx, ny] of neighbors) {
+      if (!inBounds(this.world.claimed, nx, ny)) {
+        return true;
+      }
+      if (!getCell(this.world.claimed, nx, ny)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private checkLevelComplete(): void {
+    if (this.world.levelComplete) {
+      return;
+    }
+    const claimed = this.world.claimedPercentage();
+    if (claimed >= config.captureThreshold) {
+      const bonusPercent = Math.max(0, Math.floor((claimed - config.captureThreshold) * 100));
+      this.world.score += bonusPercent * config.scoring.completionBonusPerPercent;
+      this.world.levelComplete = true;
+      this.levelCompleteTimer = 0;
+    }
+  }
+
+  private advanceLevel(): void {
+    const nextLevel = this.world.level + 1;
+    this.world.resetForLevel(nextLevel);
+    this.levelCompleteTimer = 0;
   }
 
   private handleCollisions(): void {

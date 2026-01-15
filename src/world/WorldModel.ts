@@ -1,5 +1,5 @@
 import { config } from "../config";
-import { BoolGrid, createBoolGrid, setCell, getCell, countGrid } from "./Grid";
+import { BoolGrid, createBoolGrid, setCell, getCell, countGrid, clearGrid } from "./Grid";
 
 export type PlayerState = "OnBoundary" | "Drawing" | "Dead" | "Respawn";
 export type DrawMode = "fast" | "slow" | "none";
@@ -26,6 +26,7 @@ export class WorldModel {
   lives = config.initialLives;
   level = 1;
   score = 0;
+  levelComplete = false;
 
   qixPositions: GridPoint[] = [{ x: 10, y: 10 }];
   qix = {
@@ -77,6 +78,23 @@ export class WorldModel {
     this.player.mode = "none";
     this.player.moveAccumulator = 0;
     this.resetActiveLine();
+  }
+
+  resetForLevel(level: number): void {
+    this.level = level;
+    this.levelComplete = false;
+    clearGrid(this.claimed);
+    clearGrid(this.filled);
+    clearGrid(this.activeLine);
+    this.filledMode.fill(0);
+    this.seedBoundary();
+    this.spawnPlayer();
+    this.qix.x = Math.floor(this.gridWidth / 2);
+    this.qix.y = Math.floor(this.gridHeight / 2);
+    this.qix.vx = 1;
+    this.qix.vy = 0;
+    this.qixPositions = [{ x: Math.floor(this.qix.x), y: Math.floor(this.qix.y) }];
+    this.sparx.t = 0;
   }
 
   isClaimed(x: number, y: number): boolean {
