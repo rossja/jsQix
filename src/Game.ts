@@ -219,25 +219,38 @@ export class Game {
 
     this.markerGfx.clear();
     const markerSize = Math.max(cellWidth, cellHeight) * 4;
-    const markerX = this.world.player.gridX * cellWidth + (cellWidth - markerSize) / 2;
-    const markerY = this.world.player.gridY * cellHeight + (cellHeight - markerSize) / 2;
-    this.markerGfx.rect(markerX, markerY, markerSize, markerSize);
+    const markerCenterX = this.world.player.gridX * cellWidth + cellWidth / 2;
+    const markerCenterY = this.world.player.gridY * cellHeight + cellHeight / 2;
+    this.markerGfx.moveTo(markerCenterX, markerCenterY - markerSize / 2);
+    this.markerGfx.lineTo(markerCenterX + markerSize / 2, markerCenterY);
+    this.markerGfx.lineTo(markerCenterX, markerCenterY + markerSize / 2);
+    this.markerGfx.lineTo(markerCenterX - markerSize / 2, markerCenterY);
+    this.markerGfx.closePath();
     this.markerGfx.fill(config.colors.marker);
 
     this.qixGfx.clear();
     const qixX = this.world.qix.x * cellWidth;
     const qixY = this.world.qix.y * cellHeight;
-    const baseRadius = Math.max(cellWidth, cellHeight) * 10;
-    const wobble = Math.sin(this.elapsed * 2) * 0.6;
-    for (let i = 0; i < 6; i += 1) {
-      const angle = (i / 6) * Math.PI + wobble;
-      const length = baseRadius * (0.6 + 0.4 * Math.sin(this.elapsed * 1.5 + i));
-      const dx = Math.cos(angle) * length;
-      const dy = Math.sin(angle) * length * 0.6;
-      this.qixGfx.moveTo(qixX - dx, qixY - dy);
-      this.qixGfx.lineTo(qixX + dx, qixY + dy);
+    const palette = [0x7affff, 0x4da6ff, 0x66ffcc, 0xa64dff, 0xff4dff];
+    const baseSpan = Math.max(cellWidth, cellHeight) * 3;
+    const lines = this.world.qix.lines;
+    const centerIndex = (lines.length - 1) / 2;
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const offset = (i - centerIndex) * baseSpan;
+      const perpX = Math.cos(line.angle + Math.PI / 2);
+      const perpY = Math.sin(line.angle + Math.PI / 2);
+      const ox = perpX * offset;
+      const oy = perpY * offset;
+      const length = line.length * Math.max(cellWidth, cellHeight) * 10;
+      const dx = Math.cos(line.angle) * length;
+      const dy = Math.sin(line.angle) * length;
+      this.qixGfx.moveTo(qixX + ox - dx, qixY + oy - dy);
+      this.qixGfx.lineTo(qixX + ox + dx, qixY + oy + dy);
+      const color = palette[(i + Math.floor(this.elapsed * 2)) % palette.length];
+      const width = 1 + (i % 2);
+      this.qixGfx.stroke({ width, color });
     }
-    this.qixGfx.stroke({ width: 3, color: config.colors.qix });
 
     const sparx = getSparxPosition(this.world);
     this.sparxGfx.clear();

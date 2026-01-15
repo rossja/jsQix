@@ -9,7 +9,7 @@ export const config = {
     completionBonusPerPercent: 100
   },
   speeds: {
-    boundaryCellsPerSec: 20,
+    boundaryCellsPerSec: 56,
     drawFastCellsPerSec: 48,
     drawSlowCellsPerSec: 16,
     qixCellsPerSec: 12,

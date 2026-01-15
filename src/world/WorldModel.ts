@@ -33,7 +33,12 @@ export class WorldModel {
     x: 0,
     y: 0,
     vx: 1,
-    vy: 0
+    vy: 0,
+    lineTimer: 0,
+    lines: [] as { angle: number; length: number }[],
+    heading: 0,
+    targetHeading: 0,
+    turnTimer: 0
   };
   sparx = {
     t: 0
